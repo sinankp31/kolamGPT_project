@@ -1,0 +1,10 @@
+Flask
+Flask-cors
+Flask-Mail
+python-dotenv
+google-generativeai
+opencv-python-headless
+numpy
+scipy
+networkx
+Pillow
