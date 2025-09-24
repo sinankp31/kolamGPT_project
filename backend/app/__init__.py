@@ -3,7 +3,7 @@ from flask_cors import CORS
 from flask_mail import Mail
 from config import config
 
-# Initialize Flask-Mail extension
+# Initialize Flask-Mail at module level for import
 mail = Mail()
 
 def create_app(config_name='default'):
