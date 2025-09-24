@@ -1,4 +1,5 @@
 import numpy as np
+import cv2
 from app.kolam_analysis import image_processor, analyzer
 
 def analyze_kolam_image(cv_image: np.ndarray) -> tuple:

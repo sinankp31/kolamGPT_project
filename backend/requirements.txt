@@ -8,3 +8,5 @@ numpy
 scipy
 networkx
 Pillow
+scikit-image
+scikit-learn

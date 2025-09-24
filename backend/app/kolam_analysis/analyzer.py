@@ -1,45 +1,247 @@
 import numpy as np
 import networkx as nx
-from scipy.spatial.distance import cdist
-from typing import List
+from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.spatial import ConvexHull
+from scipy.stats import linregress
+from typing import List, Tuple, Dict
 from .models import KolamPattern, Dot, Line
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
 
 class KolamAnalyzer:
     def __init__(self, image_shape):
         self.shape = image_shape
 
-    def build_graph(self, dots: List[Dot], skeleton_image: np.ndarray) -> KolamPattern:
-        """Builds a graph representation of the kolam by connecting the dots."""
+    def build_graph_advanced(self, dots: List[Dot], skeleton_image: np.ndarray) -> KolamPattern:
+        """
+        Advanced graph construction using multiple connection strategies and validation.
+        """
         pattern = KolamPattern(dots=dots)
-        if not dots: 
+        if not dots or len(dots) < 2:
             return pattern
 
-        # Add all detected dots as nodes in the graph
-        dot_positions = {i: (dot.x, dot.y) for i, dot in enumerate(dots)}
-        for i, pos in dot_positions.items():
-            pattern.graph.add_node(i, pos=pos)
-        
+        # Add nodes with enhanced attributes
+        for i, dot in enumerate(dots):
+            pattern.graph.add_node(i, pos=(dot.x, dot.y), radius=dot.radius, weight=1.0)
+
         dot_array = np.array([[d.x, d.y] for d in dots])
-        # Get the coordinates of all "on" pixels in the processed line drawing
+
+        # Strategy 1: Direct line pixel analysis with improved filtering
         line_pixels = np.argwhere(skeleton_image > 0)
-        
-        # A simple but effective method: for each pixel on a line, find the two
-        # closest dots and create an edge between them. This connects the dots
-        # that form the endpoints of the lines.
-        for y, x in line_pixels:
-            distances = cdist(np.array([[x, y]]), dot_array)
-            if distances.shape[1] < 2: 
-                continue # Not enough dots to form a line
-            
-            idx1, idx2 = np.argsort(distances[0])[:2]
-            
-            # Add the edge if it's not already in the graph
-            if not pattern.graph.has_edge(idx1, idx2):
-                pattern.graph.add_edge(idx1, idx2)
-                p1 = (dots[idx1].x, dots[idx1].y)
-                p2 = (dots[idx2].x, dots[idx2].y)
-                pattern.lines.append(Line(p1=p1, p2=p2))
+        if len(line_pixels) > 0:
+            self._connect_via_line_pixels(pattern, dots, dot_array, line_pixels)
+
+        # Strategy 2: Geometric proximity analysis
+        self._connect_via_proximity(pattern, dots, dot_array)
+
+        # Strategy 3: Pattern-aware connections
+        self._connect_via_patterns(pattern, dots)
+
+        # Strategy 4: Validate and optimize connections
+        self._optimize_connections(pattern)
+
         return pattern
+
+    def _connect_via_line_pixels(self, pattern: KolamPattern, dots: List[Dot],
+                                dot_array: np.ndarray, line_pixels: np.ndarray) -> None:
+        """Connect dots based on actual line pixels with advanced filtering."""
+        # Use spatial indexing for efficiency
+        from scipy.spatial import cKDTree
+        tree = cKDTree(dot_array)
+
+        connections = {}
+
+        for y, x in line_pixels[::2]:  # Sample every other pixel for performance
+            # Find dots within reasonable distance of this pixel
+            distances, indices = tree.query([x, y], k=3, distance_upper_bound=30)
+
+            valid_indices = indices[distances != np.inf]
+            if len(valid_indices) >= 2:
+                # Connect the two closest dots
+                idx1, idx2 = valid_indices[:2]
+
+                # Validate connection makes sense
+                if self._validate_connection(dots[idx1], dots[idx2], (x, y)):
+                    key = tuple(sorted([idx1, idx2]))
+                    if key not in connections:
+                        connections[key] = 0
+                    connections[key] += 1
+
+        # Create edges based on connection frequency
+        for (idx1, idx2), frequency in connections.items():
+            if frequency >= 2:  # Require multiple pixel confirmations
+                if not pattern.graph.has_edge(idx1, idx2):
+                    pattern.graph.add_edge(idx1, idx2, weight=frequency)
+                    p1 = (dots[idx1].x, dots[idx1].y)
+                    p2 = (dots[idx2].x, dots[idx2].y)
+                    pattern.lines.append(Line(p1=p1, p2=p2))
+
+    def _connect_via_proximity(self, pattern: KolamPattern, dots: List[Dot],
+                              dot_array: np.ndarray) -> None:
+        """Connect dots based on geometric proximity and pattern analysis."""
+        # Calculate pairwise distances
+        distances = pdist(dot_array)
+        distance_matrix = squareform(distances)
+
+        # Find reasonable connection distances based on pattern statistics
+        mean_distance = np.mean(distances)
+        std_distance = np.std(distances)
+
+        # Adaptive threshold based on pattern density
+        density_factor = len(dots) / (np.ptp(dot_array[:, 0]) * np.ptp(dot_array[:, 1]))
+        threshold = mean_distance * (0.8 if density_factor > 0.001 else 1.2)
+
+        # Connect dots within threshold
+        n = len(dots)
+        for i in range(n):
+            for j in range(i + 1, n):
+                if distance_matrix[i, j] <= threshold:
+                    if self._validate_geometric_connection(dots[i], dots[j], pattern):
+                        if not pattern.graph.has_edge(i, j):
+                            pattern.graph.add_edge(i, j, weight=1.0, type='proximity')
+                            pattern.lines.append(Line(
+                                p1=(dots[i].x, dots[i].y),
+                                p2=(dots[j].x, dots[j].y)
+                            ))
+
+    def _connect_via_patterns(self, pattern: KolamPattern, dots: List[Dot]) -> None:
+        """Connect dots based on recognized kolam patterns."""
+        # Detect grid patterns
+        grid_info = detect_grid_pattern_advanced(dots)
+        if grid_info['is_grid']:
+            self._connect_grid_pattern(pattern, dots, grid_info)
+
+        # Detect radial patterns
+        radial_info = detect_radial_pattern(dots)
+        if radial_info['is_radial']:
+            self._connect_radial_pattern(pattern, dots, radial_info)
+
+    def _connect_grid_pattern(self, pattern: KolamPattern, dots: List[Dot],
+                             grid_info: Dict) -> None:
+        """Connect dots following grid pattern rules."""
+        rows, cols = grid_info['dimensions']
+
+        # Create grid-based connections
+        for i in range(rows):
+            for j in range(cols):
+                current_idx = i * cols + j
+                if current_idx >= len(dots):
+                    continue
+
+                # Connect right
+                if j < cols - 1:
+                    right_idx = i * cols + (j + 1)
+                    if right_idx < len(dots):
+                        self._add_validated_edge(pattern, dots, current_idx, right_idx)
+
+                # Connect down
+                if i < rows - 1:
+                    down_idx = (i + 1) * cols + j
+                    if down_idx < len(dots):
+                        self._add_validated_edge(pattern, dots, current_idx, down_idx)
+
+    def _connect_radial_pattern(self, pattern: KolamPattern, dots: List[Dot],
+                               radial_info: Dict) -> None:
+        """Connect dots following radial pattern rules."""
+        center = radial_info['center']
+
+        # Sort dots by angle from center
+        angles = []
+        for dot in dots:
+            angle = np.arctan2(dot.y - center[1], dot.x - center[0])
+            angles.append((angle, dot))
+
+        angles.sort(key=lambda x: x[0])
+
+        # Connect dots in angular order (simplified radial pattern)
+        for i in range(len(angles) - 1):
+            idx1 = dots.index(angles[i][1])
+            idx2 = dots.index(angles[i + 1][1])
+            self._add_validated_edge(pattern, dots, idx1, idx2)
+
+    def _add_validated_edge(self, pattern: KolamPattern, dots: List[Dot],
+                           idx1: int, idx2: int) -> None:
+        """Add edge only if it passes validation."""
+        if not pattern.graph.has_edge(idx1, idx2):
+            if self._validate_connection(dots[idx1], dots[idx2]):
+                pattern.graph.add_edge(idx1, idx2, weight=1.0, type='pattern')
+                pattern.lines.append(Line(
+                    p1=(dots[idx1].x, dots[idx1].y),
+                    p2=(dots[idx2].x, dots[idx2].y)
+                ))
+
+    def _validate_connection(self, dot1: Dot, dot2: Dot, line_point: Tuple[int, int] = None) -> bool:
+        """Validate if a connection between two dots makes sense."""
+        # Basic distance check
+        distance = np.sqrt((dot1.x - dot2.x)**2 + (dot1.y - dot2.y)**2)
+        if distance < 5 or distance > 200:  # Reasonable kolam line lengths
+            return False
+
+        # Angle diversity check (avoid too many connections from one dot)
+        # This would be checked at graph level
+
+        # Line point validation if provided
+        if line_point is not None:
+            # Check if line_point is reasonably on the line between dots
+            # Using vector projection
+            v1 = np.array([dot2.x - dot1.x, dot2.y - dot1.y])
+            v2 = np.array([line_point[0] - dot1.x, line_point[1] - dot1.y])
+
+            if np.linalg.norm(v1) > 0:
+                projection = np.dot(v2, v1) / np.dot(v1, v1)
+                if not (0 <= projection <= 1):
+                    return False
+
+                # Check perpendicular distance
+                perp_distance = np.linalg.norm(v2 - projection * v1)
+                if perp_distance > 10:  # Too far from line
+                    return False
+
+        return True
+
+    def _validate_geometric_connection(self, dot1: Dot, dot2: Dot, pattern: KolamPattern) -> bool:
+        """Validate connection based on geometric constraints."""
+        # Avoid connecting dots that are too close to existing connections
+        # This is a simplified version - could be enhanced with more sophisticated rules
+        return self._validate_connection(dot1, dot2)
+
+    def _optimize_connections(self, pattern: KolamPattern) -> None:
+        """Optimize the graph by removing unlikely connections and adding missing ones."""
+        # Remove edges that connect too many dots (hub detection)
+        degrees = dict(pattern.graph.degree())
+        avg_degree = np.mean(list(degrees.values()))
+
+        edges_to_remove = []
+        for node, degree in degrees.items():
+            if degree > avg_degree * 2:  # Hub detection
+                # Remove some edges from high-degree nodes
+                neighbors = list(pattern.graph.neighbors(node))
+                # Keep only the closest connections
+                distances = [(np.linalg.norm(
+                    np.array(pattern.graph.nodes[node]['pos']) -
+                    np.array(pattern.graph.nodes[neighbor]['pos'])
+                ), neighbor) for neighbor in neighbors]
+
+                distances.sort()
+                # Keep only the closest 60% of connections
+                keep_count = max(2, int(len(distances) * 0.6))
+                for _, neighbor in distances[keep_count:]:
+                    if pattern.graph.has_edge(node, neighbor):
+                        edges_to_remove.append((node, neighbor))
+
+        for edge in edges_to_remove:
+            pattern.graph.remove_edge(*edge)
+            # Remove corresponding line
+            pattern.lines = [line for line in pattern.lines
+                           if not ((line.p1 == pattern.graph.nodes[edge[0]]['pos'] and
+                                   line.p2 == pattern.graph.nodes[edge[1]]['pos']) or
+                                  (line.p1 == pattern.graph.nodes[edge[1]]['pos'] and
+                                   line.p2 == pattern.graph.nodes[edge[0]]['pos']))]
+
+    # Legacy method for backward compatibility
+    def build_graph(self, dots: List[Dot], skeleton_image: np.ndarray) -> KolamPattern:
+        """Legacy graph building method."""
+        return self.build_graph_advanced(dots, skeleton_image)
 
     def analyze_pattern(self, pattern: KolamPattern) -> KolamPattern:
         """Performs mathematical analysis on the generated graph."""
@@ -130,34 +332,113 @@ def detect_rotational_symmetry(pattern: KolamPattern) -> int:
         return 2  # 180 degree symmetry
     return 1  # no rotational symmetry detected
 
-def detect_grid_pattern(dots: List[Dot]) -> str:
-    """Detect if dots form a regular grid pattern."""
+def detect_grid_pattern_advanced(dots: List[Dot]) -> Dict:
+    """
+    Advanced grid pattern detection using clustering and statistical analysis.
+    """
     if len(dots) < 4:
-        return "Irregular"
+        return {'is_grid': False, 'dimensions': (0, 0), 'confidence': 0.0}
 
-    # Extract positions
     positions = np.array([[d.x, d.y] for d in dots])
 
-    # Try to find grid dimensions
-    # Sort by x and y
-    x_coords = sorted(set(p[0] for p in positions))
-    y_coords = sorted(set(p[1] for p in positions))
+    # Method 1: K-means clustering to find rows and columns
+    max_clusters = min(len(dots) // 2, 10)
+    best_score = -1
+    best_dims = (0, 0)
 
-    if len(x_coords) > 1 and len(y_coords) > 1:
-        # Check if spacing is regular
-        x_diffs = [x_coords[i+1] - x_coords[i] for i in range(len(x_coords)-1)]
-        y_diffs = [y_coords[i+1] - y_coords[i] for i in range(len(y_coords)-1)]
+    for n_clusters in range(2, max_clusters + 1):
+        try:
+            kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
+            labels = kmeans.fit_predict(positions)
 
-        x_regular = len(set(round(d, 1) for d in x_diffs)) == 1
-        y_regular = len(set(round(d, 1) for d in y_diffs)) == 1
+            if len(set(labels)) > 1:
+                score = silhouette_score(positions, labels)
+                if score > best_score:
+                    best_score = score
+                    # Estimate grid dimensions
+                    rows = len(set(positions[:, 1]))  # Unique Y coordinates
+                    cols = len(set(positions[:, 0]))  # Unique X coordinates
+                    best_dims = (rows, cols)
+        except:
+            continue
 
-        if x_regular and y_regular:
-            return f"{len(x_coords)}x{len(y_coords)} grid"
-        elif x_regular:
-            return f"{len(x_coords)} columns"
-        elif y_regular:
-            return f"{len(y_coords)} rows"
+    # Method 2: Statistical analysis of spacing
+    x_coords = sorted(positions[:, 0])
+    y_coords = sorted(positions[:, 1])
 
+    x_diffs = np.diff(x_coords)
+    y_diffs = np.diff(y_coords)
+
+    # Check coefficient of variation (lower is more regular)
+    x_cv = np.std(x_diffs) / np.mean(x_diffs) if len(x_diffs) > 0 else 1.0
+    y_cv = np.std(y_diffs) / np.mean(y_diffs) if len(y_diffs) > 0 else 1.0
+
+    regularity_score = 1.0 - min(x_cv, y_cv)
+
+    # Determine if it's a grid
+    is_grid = regularity_score > 0.7 and best_score > 0.3
+
+    confidence = (regularity_score + min(best_score, 1.0)) / 2
+
+    return {
+        'is_grid': is_grid,
+        'dimensions': best_dims,
+        'confidence': confidence,
+        'regularity_score': regularity_score
+    }
+
+def detect_radial_pattern(dots: List[Dot]) -> Dict:
+    """
+    Detect radial patterns common in kolam designs.
+    """
+    if len(dots) < 5:
+        return {'is_radial': False, 'center': (0, 0), 'confidence': 0.0}
+
+    positions = np.array([[d.x, d.y] for d in dots])
+
+    # Find potential centers (centroid, median, etc.)
+    centers = [
+        np.mean(positions, axis=0),  # Centroid
+        np.median(positions, axis=0),  # Median center
+    ]
+
+    best_center = None
+    best_score = 0
+
+    for center in centers:
+        # Calculate distances and angles from center
+        distances = np.linalg.norm(positions - center, axis=1)
+        angles = np.arctan2(positions[:, 1] - center[1], positions[:, 0] - center[0])
+
+        # Check for radial symmetry
+        # Look for patterns in angle distributions
+        angle_hist, _ = np.histogram(angles, bins=12)
+        angle_uniformity = 1.0 - (np.std(angle_hist) / np.mean(angle_hist))
+
+        # Check distance regularity (concentric circles)
+        distance_hist, _ = np.histogram(distances, bins=5)
+        distance_uniformity = 1.0 - (np.std(distance_hist) / np.mean(distance_hist))
+
+        radial_score = (angle_uniformity + distance_uniformity) / 2
+
+        if radial_score > best_score:
+            best_score = radial_score
+            best_center = center
+
+    is_radial = best_score > 0.6
+
+    return {
+        'is_radial': is_radial,
+        'center': tuple(best_center) if best_center is not None else (0, 0),
+        'confidence': best_score
+    }
+
+def detect_grid_pattern(dots: List[Dot]) -> str:
+    """Legacy function for backward compatibility."""
+    result = detect_grid_pattern_advanced(dots)
+    if result['is_grid']:
+        rows, cols = result['dimensions']
+        return f"{rows}x{cols} grid"
     return "Irregular"
 
 def detect_region(pattern: KolamPattern) -> str:

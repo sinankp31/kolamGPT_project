@@ -174,75 +174,213 @@ def create_kolam_generation_prompt(analysis_results: dict, dot_count: int, line_
 
     return prompt.strip()
 
-def generate_procedural_kolam(dots: list, lines: list, analysis_results: dict = None) -> Dict[str, Any]:
-    """Generates a kolam image procedurally with improved algorithms."""
+def generate_procedural_kolam_advanced(dots: list, lines: list, analysis_results: dict = None) -> Dict[str, Any]:
+    """
+    Advanced procedural kolam generation with artistic enhancements and pattern recognition.
+    """
     try:
         import cv2
         import numpy as np
 
-        # Create a high-quality white canvas
-        img_size = 800  # Higher resolution
-        regenerated_img = np.ones((img_size, img_size, 3), dtype=np.uint8) * 255
+        # High-resolution canvas for quality
+        img_size = 1024
+        canvas = np.ones((img_size, img_size, 3), dtype=np.uint8) * 255
 
         if not dots:
-            # If no dots detected, create a simple default pattern
-            return create_default_kolam_pattern(regenerated_img)
+            return create_enhanced_default_pattern(canvas)
 
-        # Calculate bounds and scaling
-        if dots:
-            x_coords = [d['x'] for d in dots]
-            y_coords = [d['y'] for d in dots]
-            min_x, max_x = min(x_coords), max(x_coords)
-            min_y, max_y = min(y_coords), max(y_coords)
+        # Advanced scaling and positioning
+        positions = np.array([[d['x'], d['y']] for d in dots])
+        min_coords = np.min(positions, axis=0)
+        max_coords = np.max(positions, axis=0)
+        center = (min_coords + max_coords) / 2
 
-            # Add padding
-            width = max_x - min_x if max_x > min_x else 100
-            height = max_y - min_y if max_y > min_y else 100
+        # Calculate optimal scaling with padding
+        content_size = max_coords - min_coords
+        padding_factor = 0.15
+        scale_factor = (img_size * (1 - 2 * padding_factor)) / max(content_size)
+        scale_factor = min(scale_factor, 1.0)  # Don't upscale
 
-            scale_x = (img_size * 0.8) / width if width > 0 else 1
-            scale_y = (img_size * 0.8) / height if height > 0 else 1
-            scale = min(scale_x, scale_y)
+        # Center the pattern on canvas
+        offset = img_size / 2 - center * scale_factor
 
-            offset_x = img_size * 0.1 - min_x * scale
-            offset_y = img_size * 0.1 - min_y * scale
+        # Draw with artistic enhancements
+        canvas = draw_enhanced_dots(canvas, dots, scale_factor, offset)
+        canvas = draw_enhanced_lines(canvas, lines, scale_factor, offset, analysis_results)
 
-            # Draw dots with better quality
-            for dot in dots:
-                center = (int(dot['x'] * scale + offset_x), int(dot['y'] * scale + offset_y))
-                radius = max(4, int(dot.get('radius', 3) * scale * 0.5))
-                cv2.circle(regenerated_img, center, radius, (0, 0, 0), -1)
-                # Add a subtle border for better visibility
-                cv2.circle(regenerated_img, center, radius + 1, (0, 0, 0), 1)
+        # Apply artistic post-processing
+        canvas = apply_artistic_effects(canvas, analysis_results)
 
-            # Draw lines with better quality
-            for line in lines:
-                start_point = (int(line['start'][0] * scale + offset_x),
-                              int(line['start'][1] * scale + offset_y))
-                end_point = (int(line['end'][0] * scale + offset_x),
-                            int(line['end'][1] * scale + offset_y))
-                cv2.line(regenerated_img, start_point, end_point, (0, 0, 0), 3)
-
-        # Apply anti-aliasing for smoother lines
-        regenerated_img = cv2.GaussianBlur(regenerated_img, (3, 3), 0)
-
-        # Convert to base64
-        success, encoded_img = cv2.imencode('.png', regenerated_img, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+        # High-quality encoding
+        success, encoded_img = cv2.imencode('.png', canvas,
+                                          [cv2.IMWRITE_PNG_COMPRESSION, 0])
         if success:
             image_base64 = base64.b64encode(encoded_img.tobytes()).decode('utf-8')
             return {
                 "status": "success",
-                "message": "Digital kolam generated successfully.",
+                "message": "Advanced digital kolam generated with artistic enhancements.",
                 "image_base64": image_base64
             }
         else:
-            raise ValueError("Failed to encode image")
+            raise ValueError("Failed to encode enhanced image")
 
     except Exception as e:
         return {
             "status": "error",
-            "message": f"Procedural generation failed: {str(e)}",
+            "message": f"Advanced generation failed: {str(e)}",
             "image_base64": ""
         }
+
+def draw_enhanced_dots(canvas: np.ndarray, dots: list, scale: float, offset: np.ndarray) -> np.ndarray:
+    """Draw dots with enhanced visual quality and variations."""
+    for dot in dots:
+        center = (int(dot['x'] * scale + offset[0]),
+                 int(dot['y'] * scale + offset[1]))
+        radius = max(3, int((dot.get('radius', 4) * scale) ** 0.8))  # Non-linear scaling
+
+        # Main dot with slight randomness for artistic feel
+        cv2.circle(canvas, center, radius, (0, 0, 0), -1)
+
+        # Subtle highlight for depth
+        highlight_center = (center[0] - radius//3, center[1] - radius//3)
+        if radius > 4:
+            cv2.circle(canvas, highlight_center, max(1, radius//4), (40, 40, 40), -1)
+
+        # Soft edge for blending
+        cv2.circle(canvas, center, radius + 1, (0, 0, 0), 1)
+
+    return canvas
+
+def draw_enhanced_lines(canvas: np.ndarray, lines: list, scale: float,
+                       offset: np.ndarray, analysis_results: dict = None) -> np.ndarray:
+    """Draw lines with varying thickness and artistic styling."""
+    symmetry_score = analysis_results.get('symmetry_score', 0.5) if analysis_results else 0.5
+    region = analysis_results.get('region', 'unknown') if analysis_results else 'unknown'
+
+    for line in lines:
+        start = (int(line['start'][0] * scale + offset[0]),
+                int(line['start'][1] * scale + offset[1]))
+        end = (int(line['end'][0] * scale + offset[0]),
+              int(line['end'][1] * scale + offset[1]))
+
+        # Dynamic line thickness based on pattern characteristics
+        base_thickness = 2
+        if symmetry_score > 0.7:
+            thickness = base_thickness + 1  # Thicker for symmetrical patterns
+        elif 'kerala' in region.lower():
+            thickness = base_thickness  # Finer for Kerala style
+        else:
+            thickness = base_thickness
+
+        # Draw main line
+        cv2.line(canvas, start, end, (0, 0, 0), thickness)
+
+        # Add subtle curve for artistic effect (slight bezier curve)
+        if np.linalg.norm(np.array(end) - np.array(start)) > 50:
+            canvas = add_line_enhancement(canvas, start, end, thickness)
+
+    return canvas
+
+def add_line_enhancement(canvas: np.ndarray, start: tuple, end: tuple, thickness: int) -> np.ndarray:
+    """Add subtle artistic enhancements to lines."""
+    # Calculate perpendicular vector for slight waviness
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length = np.sqrt(dx*dx + dy*dy)
+
+    if length > 20:
+        # Add slight curve using quadratic bezier
+        mid_x = (start[0] + end[0]) / 2
+        mid_y = (start[1] + end[1]) / 2
+
+        # Small random offset for artistic variation
+        offset = np.random.normal(0, 2)
+        perp_x = -dy / length * offset
+        perp_y = dx / length * offset
+
+        control = (int(mid_x + perp_x), int(mid_y + perp_y))
+
+        # Draw curved line using multiple segments
+        points = quadratic_bezier_points(start, control, end, 10)
+        for i in range(len(points) - 1):
+            cv2.line(canvas, points[i], points[i+1], (0, 0, 0), thickness)
+
+    return canvas
+
+def quadratic_bezier_points(p0: tuple, p1: tuple, p2: tuple, segments: int = 10) -> list:
+    """Generate points along a quadratic Bezier curve."""
+    points = []
+    for t in np.linspace(0, 1, segments):
+        x = (1-t)**2 * p0[0] + 2*(1-t)*t * p1[0] + t**2 * p2[0]
+        y = (1-t)**2 * p0[1] + 2*(1-t)*t * p1[1] + t**2 * p2[1]
+        points.append((int(x), int(y)))
+    return points
+
+def apply_artistic_effects(canvas: np.ndarray, analysis_results: dict = None) -> np.ndarray:
+    """Apply artistic post-processing effects."""
+    # Subtle texture overlay
+    texture = np.random.normal(0, 1, canvas.shape).astype(np.uint8) * 2
+    canvas = cv2.add(canvas, texture)
+
+    # Slight blur for smoothness
+    canvas = cv2.GaussianBlur(canvas, (3, 3), 0.5)
+
+    # Enhance contrast slightly
+    lab = cv2.cvtColor(canvas, cv2.COLOR_BGR2LAB)
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    lab[:, :, 0] = clahe.apply(lab[:, :, 0])
+    canvas = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+
+    return canvas
+
+def create_enhanced_default_pattern(canvas: np.ndarray) -> Dict[str, Any]:
+    """Create an enhanced default kolam pattern when no dots are detected."""
+    try:
+        import cv2
+
+        center = (canvas.shape[1] // 2, canvas.shape[0] // 2)
+        max_radius = min(canvas.shape) // 3
+
+        # Create concentric patterns with varying complexity
+        for i in range(3):
+            radius = max_radius - i * 40
+            cv2.circle(canvas, center, radius, (0, 0, 0), 2)
+
+        # Add radial lines
+        for angle in range(0, 360, 30):
+            rad_angle = np.radians(angle)
+            end_x = int(center[0] + max_radius * np.cos(rad_angle))
+            end_y = int(center[1] + max_radius * np.sin(rad_angle))
+            cv2.line(canvas, center, (end_x, end_y), (0, 0, 0), 2)
+
+        # Add decorative dots
+        for angle in range(0, 360, 45):
+            rad_angle = np.radians(angle)
+            dot_x = int(center[0] + (max_radius - 20) * np.cos(rad_angle))
+            dot_y = int(center[1] + (max_radius - 20) * np.sin(rad_angle))
+            cv2.circle(canvas, (dot_x, dot_y), 4, (0, 0, 0), -1)
+
+        success, encoded_img = cv2.imencode('.png', canvas)
+        if success:
+            image_base64 = base64.b64encode(encoded_img.tobytes()).decode('utf-8')
+            return {
+                "status": "success",
+                "message": "Enhanced default kolam pattern generated.",
+                "image_base64": image_base64
+            }
+        else:
+            raise ValueError("Failed to encode default pattern")
+
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Enhanced default pattern generation failed: {str(e)}",
+            "image_base64": ""
+        }
+
+# Legacy function for backward compatibility
+def generate_procedural_kolam(dots: list, lines: list, analysis_results: dict = None) -> Dict[str, Any]:
+    """Legacy procedural generation function."""
+    return generate_procedural_kolam_advanced(dots, lines, analysis_results)
 
 def create_default_kolam_pattern(img) -> Dict[str, Any]:
     """Creates a default kolam pattern when no dots are detected."""
