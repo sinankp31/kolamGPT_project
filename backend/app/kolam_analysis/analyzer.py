@@ -5,8 +5,12 @@ from scipy.spatial import ConvexHull
 from scipy.stats import linregress
 from typing import List, Tuple, Dict
 from .models import KolamPattern, Dot, Line
-from sklearn.cluster import KMeans
-from sklearn.metrics import silhouette_score
+try:
+    from sklearn.cluster import KMeans
+    from sklearn.metrics import silhouette_score
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
 
 class KolamAnalyzer:
     def __init__(self, image_shape):
@@ -341,28 +345,29 @@ def detect_grid_pattern_advanced(dots: List[Dot]) -> Dict:
 
     positions = np.array([[d.x, d.y] for d in dots])
 
-    # Method 1: K-means clustering to find rows and columns
-    max_clusters = min(len(dots) // 2, 10)
+    # Method 1: K-means clustering to find rows and columns (if sklearn available)
     best_score = -1
     best_dims = (0, 0)
 
-    for n_clusters in range(2, max_clusters + 1):
-        try:
-            kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
-            labels = kmeans.fit_predict(positions)
+    if SKLEARN_AVAILABLE:
+        max_clusters = min(len(dots) // 2, 10)
+        for n_clusters in range(2, max_clusters + 1):
+            try:
+                kmeans = KMeans(n_clusters=n_clusters, n_init=10, random_state=42)
+                labels = kmeans.fit_predict(positions)
 
-            if len(set(labels)) > 1:
-                score = silhouette_score(positions, labels)
-                if score > best_score:
-                    best_score = score
-                    # Estimate grid dimensions
-                    rows = len(set(positions[:, 1]))  # Unique Y coordinates
-                    cols = len(set(positions[:, 0]))  # Unique X coordinates
-                    best_dims = (rows, cols)
-        except:
-            continue
+                if len(set(labels)) > 1:
+                    score = silhouette_score(positions, labels)
+                    if score > best_score:
+                        best_score = score
+                        # Estimate grid dimensions
+                        rows = len(set(positions[:, 1]))  # Unique Y coordinates
+                        cols = len(set(positions[:, 0]))  # Unique X coordinates
+                        best_dims = (rows, cols)
+            except:
+                continue
 
-    # Method 2: Statistical analysis of spacing
+    # Method 2: Statistical analysis of spacing (always available)
     x_coords = sorted(positions[:, 0])
     y_coords = sorted(positions[:, 1])
 
@@ -376,9 +381,9 @@ def detect_grid_pattern_advanced(dots: List[Dot]) -> Dict:
     regularity_score = 1.0 - min(x_cv, y_cv)
 
     # Determine if it's a grid
-    is_grid = regularity_score > 0.7 and best_score > 0.3
+    is_grid = regularity_score > 0.7 and (best_score > 0.3 if SKLEARN_AVAILABLE else True)
 
-    confidence = (regularity_score + min(best_score, 1.0)) / 2
+    confidence = regularity_score if not SKLEARN_AVAILABLE else (regularity_score + min(best_score, 1.0)) / 2
 
     return {
         'is_grid': is_grid,

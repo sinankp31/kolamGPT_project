@@ -3,8 +3,19 @@ import numpy as np
 from typing import List, Tuple
 from .models import Dot
 from scipy import ndimage
-from skimage import morphology, filters
-from sklearn.cluster import DBSCAN
+
+# Optional imports with fallbacks
+try:
+    from skimage import morphology, filters
+    SKIMAGE_AVAILABLE = True
+except ImportError:
+    SKIMAGE_AVAILABLE = False
+
+try:
+    from sklearn.cluster import DBSCAN
+    SKLEARN_AVAILABLE = True
+except ImportError:
+    SKLEARN_AVAILABLE = False
 
 def advanced_preprocess_image(image: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
@@ -230,25 +241,29 @@ def _template_based_detection(gray_image: np.ndarray) -> List[Dot]:
 
 def _cluster_and_filter_dots(dots: List[Dot]) -> List[Dot]:
     """Use clustering to identify and filter dot groups."""
-    if len(dots) < 3:
+    if len(dots) < 3 or not SKLEARN_AVAILABLE:
         return dots
 
-    # Prepare data for clustering
-    positions = np.array([[dot.x, dot.y] for dot in dots])
+    try:
+        # Prepare data for clustering
+        positions = np.array([[dot.x, dot.y] for dot in dots])
 
-    # DBSCAN clustering to identify dot groups
-    clustering = DBSCAN(eps=30, min_samples=2).fit(positions)
-    labels = clustering.labels_
+        # DBSCAN clustering to identify dot groups
+        clustering = DBSCAN(eps=30, min_samples=2).fit(positions)
+        labels = clustering.labels_
 
-    filtered_dots = []
-    for i, dot in enumerate(dots):
-        if labels[i] != -1:  # Not noise
-            cluster_dots = [d for j, d in enumerate(dots) if labels[j] == labels[i]]
-            # Keep the most representative dot from each cluster
-            if dot == _select_best_dot_from_cluster(cluster_dots):
-                filtered_dots.append(dot)
+        filtered_dots = []
+        for i, dot in enumerate(dots):
+            if labels[i] != -1:  # Not noise
+                cluster_dots = [d for j, d in enumerate(dots) if labels[j] == labels[i]]
+                # Keep the most representative dot from each cluster
+                if dot == _select_best_dot_from_cluster(cluster_dots):
+                    filtered_dots.append(dot)
 
-    return filtered_dots if filtered_dots else dots
+        return filtered_dots if filtered_dots else dots
+    except Exception:
+        # Fallback to original dots if clustering fails
+        return dots
 
 def _select_best_dot_from_cluster(cluster_dots: List[Dot]) -> Dot:
     """Select the best dot from a cluster based on multiple criteria."""
