@@ -1,6 +1,7 @@
 import json
 import base64
 import io
+import numpy as np
 from flask import current_app
 import google.generativeai as genai
 from typing import Dict, Any, Tuple
