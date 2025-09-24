@@ -293,16 +293,16 @@ def _validate_dot_comprehensive(original_image: np.ndarray, gray_image: np.ndarr
 
     # Color analysis (ensure it's dark on light background)
     center_color = original_image[dot.y, dot.x]
-    if len(center_color.shape) == 3:  # BGR image
-        brightness = np.mean(center_color)
+    if len(original_image.shape) == 3:  # BGR image
+        brightness = float(np.mean(center_color))
     else:  # Grayscale
-        brightness = center_color
+        brightness = float(center_color)
 
     # Should be darker than surroundings
     region = gray_image[max(0, dot.y-5):min(height, dot.y+6),
                        max(0, dot.x-5):min(width, dot.x+6)]
     if region.size > 0:
-        region_mean = np.mean(region)
+        region_mean = float(np.mean(region))
         if brightness >= region_mean:
             return False
 
