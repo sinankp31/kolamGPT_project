@@ -188,8 +188,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Contact
 
 - **Project Lead**: Team Horizon
-- **Email**: contact@kolamgpt.com
-- **GitHub**: [https://github.com/yourusername/kolamgpt](https://github.com/yourusername/kolamgpt)
+- **Email**: muhammedsinankp31@gmail.com
+- **GitHub**: https://github.com/sinankp31/kolamGPT_project
 
 ---
 
