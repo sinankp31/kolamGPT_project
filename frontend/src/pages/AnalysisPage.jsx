@@ -1,165 +1,93 @@
 import React, { useState } from 'react';
-import Header from '../components/Header/Header';
-import ChatWindow from '../components/ChatWindow/ChatWindow';
-import MessageInput from '../components/MessageInput/MessageInput';
+import { useNavigate } from 'react-router-dom';
+import Header from '../components/landing/Header';
+import ImageUpload from '../components/ImageUpload/ImageUpload';
 import AnalysisDisplay from '../components/AnalysisDisplay/AnalysisDisplay';
-import LoadingIndicator from '../components/common/LoadingIndicator';
+import { analyzeKolamApi } from '../services/api';
 
 const AnalysisPage = () => {
-  const [messages, setMessages] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [selectedImage, setSelectedImage] = useState(null);
   const [analysisResult, setAnalysisResult] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
 
-  const handleSendMessage = async (text, image) => {
-    const userMessage = {
-      sender: 'user',
-      text: text,
-      image: image?.preview
-    };
+  const handleAnalyzeImage = async (uploadedImage) => {
+    if (!uploadedImage) return;
 
-    setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
+    setAnalysisResult(null);
 
     try {
-      let response;
-
-      if (image) {
-        // Handle image analysis
-        const formData = new FormData();
-        formData.append('image', image.file);
-        if (text) {
-          formData.append('prompt', text);
-        }
-
-        response = await fetch('/api/chat', {
-          method: 'POST',
-          body: formData,
-        });
-      } else {
-        // Handle text-only chat
-        response = await fetch('/api/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ prompt: text }),
-        });
-      }
-
-      const data = await response.json();
-
-      if (response.ok) {
-        const botMessage = {
-          sender: 'bot',
-          text: data.response
-        };
-        setMessages(prev => [...prev, botMessage]);
-      } else {
-        const errorMessage = {
-          sender: 'bot',
-          text: `Error: ${data.error || 'Something went wrong'}`
-        };
-        setMessages(prev => [...prev, errorMessage]);
-      }
+      const result = await analyzeKolamApi(uploadedImage);
+      setAnalysisResult(result);
     } catch (error) {
-      const errorMessage = {
-        sender: 'bot',
-        text: 'Sorry, I encountered an error. Please try again.'
-      };
-      setMessages(prev => [...prev, errorMessage]);
+      console.error("API Call failed:", error);
+      setAnalysisResult({ error: `Oops! I encountered an error: ${error.message}. Please ensure the backend server is running and check the console for details.` });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleImageSelect = (imageData) => {
-    setSelectedImage(imageData);
-  };
-
-  const handleAnalyzeKolam = async () => {
-    if (!selectedImage) return;
-
-    setIsLoading(true);
-
-    try {
-      // Convert image to base64
-      const response = await fetch(selectedImage.preview);
-      const blob = await response.blob();
-      const base64 = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.readAsDataURL(blob);
-      });
-
-      const analysisResponse = await fetch('/api/analyze_kolam', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ image_data: base64 }),
-      });
-
-      const data = await analysisResponse.json();
-
-      if (analysisResponse.ok) {
-        setAnalysisResult(data);
-      } else {
-        alert(`Analysis failed: ${data.error}`);
-      }
-    } catch (error) {
-      alert('Failed to analyze image. Please try again.');
-    } finally {
-      setIsLoading(false);
-    }
+  const handleGoHome = () => {
+    navigate('/');
+    setAnalysisResult(null);
+    setIsLoading(false);
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Header />
-      <div className="max-w-6xl mx-auto py-8 px-4">
-        {analysisResult ? (
-          <AnalysisDisplay analysis={analysisResult} />
-        ) : (
-          <div className="bg-white rounded-lg shadow-lg overflow-hidden">
-            <div className="h-96 flex flex-col">
-              <ChatWindow messages={messages} />
-              {isLoading && (
-                <div className="flex justify-center p-4">
-                  <LoadingIndicator />
-                </div>
-              )}
+    <div className="bg-[#FFF8DC] font-sans text-gray-900 overflow-x-hidden min-h-screen">
+      <Header onStartAnalyzing={handleGoHome} showNav={false} />
+      <main className="container mx-auto px-4 sm:px-8 md:px-16 py-8" style={{background: 'linear-gradient(135deg, #FFF8DC 0%, #FFE4B5 50%, #FFF8DC 100%)'}}>
+        <div className="max-w-6xl mx-auto">
+          {/* Hero Section for Analysis */}
+          <div className="text-center mb-16 relative">
+            <div className="inline-flex items-center gap-2 bg-orange-200 text-orange-800 px-4 py-2 rounded-full text-sm font-medium mb-8">
+              <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+              AI Analysis Studio
             </div>
-            <MessageInput
-              onSendMessage={handleSendMessage}
-              onImageSelect={handleImageSelect}
-              selectedImage={selectedImage}
-              isLoading={isLoading}
-            />
-            {selectedImage && (
-              <div className="p-4 border-t bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <img
-                      src={selectedImage.preview}
-                      alt="Selected"
-                      className="w-12 h-12 object-cover rounded"
-                    />
-                    <span className="text-sm text-gray-600">{selectedImage.file.name}</span>
-                  </div>
-                  <button
-                    onClick={handleAnalyzeKolam}
-                    disabled={isLoading}
-                    className="bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50"
-                  >
-                    {isLoading ? 'Analyzing...' : 'Analyze Kolam'}
-                  </button>
-                </div>
-              </div>
-            )}
+
+            <h1 className="text-5xl sm:text-6xl lg:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+              Analyze Your <span className="text-orange-600">Kolam Designs</span>
+            </h1>
+
+            <p className="text-xl sm:text-2xl text-gray-700 max-w-4xl mx-auto mb-10 leading-relaxed">
+              Upload your kolam patterns and let our AI analyze symmetry, patterns, and provide detailed insights about your traditional art.
+            </p>
+
+            {/* Decorative sticker */}
+            <div className="absolute top-0 right-0 bg-yellow-300 p-4 border-2 border-black rounded-lg shadow-[8px_8px_0_0_#000] transform rotate-12 hidden md:block">
+              <div className="text-sm font-bold text-black">🎨 AI MAGIC</div>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Upload and Analysis Section */}
+          <div className="flex flex-col lg:flex-row gap-8 mb-12">
+            {/* Upload Area - Fixed Width */}
+            <div className="lg:w-96 flex-shrink-0">
+              <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-orange-200 sticky top-8">
+                <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">Upload Your Kolam</h2>
+                <ImageUpload onAnalyze={handleAnalyzeImage} isLoading={isLoading} />
+              </div>
+            </div>
+
+            {/* Analysis Results - Flexible Width */}
+            <div className="flex-1">
+              <div className="bg-white rounded-2xl shadow-xl p-8 border-2 border-blue-200">
+                <h2 className="text-3xl font-bold text-gray-900 mb-8 text-center">Analysis Results</h2>
+                <AnalysisDisplay result={analysisResult} isLoading={isLoading} />
+              </div>
+            </div>
+          </div>
+
+          {/* Fun Elements */}
+          <div className="text-center">
+            <div className="inline-flex items-center gap-4 bg-gradient-to-r from-green-200 to-blue-200 text-green-800 px-8 py-4 rounded-full text-lg font-medium shadow-lg">
+              <span className="text-xl">✨</span>
+              <span>Powered by Advanced AI Technology</span>
+              <span className="text-xl">🎨</span>
+            </div>
+          </div>
+        </div>
+      </main>
     </div>
   );
 };

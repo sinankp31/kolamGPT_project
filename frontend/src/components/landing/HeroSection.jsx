@@ -1,53 +1,47 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Sparkles } from 'lucide-react';
 
-const HeroSection = () => {
+const HeroSection = ({ onStartAnalyzing }) => {
   return (
-    <section className="pt-20 pb-16 bg-gradient-to-br from-orange-50 to-yellow-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 animate-fade-in-up">
-            Discover the Beauty of
-            <span className="text-orange-600 block">Traditional Kolam Art</span>
-          </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
-            Upload your kolam patterns and let AI analyze their mathematical beauty, cultural significance, and artistic elements. Experience the perfect blend of tradition and technology.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center animate-fade-in-up" style={{ animationDelay: '0.4s' }}>
-            <Link
-              to="/analyze"
-              className="bg-orange-600 text-white px-8 py-4 rounded-lg hover:bg-orange-700 transition-colors font-semibold text-lg shadow-lg hover:shadow-xl"
-            >
-              Analyze Your Kolam
-            </Link>
-            <button className="border-2 border-orange-600 text-orange-600 px-8 py-4 rounded-lg hover:bg-orange-50 transition-colors font-semibold text-lg">
-              Learn More
-            </button>
-          </div>
-        </div>
-        <div className="mt-16 relative">
-          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-4xl mx-auto">
-            <div className="grid md:grid-cols-3 gap-8 text-center">
-              <div className="animate-fade-in-up" style={{ animationDelay: '0.6s' }}>
-                <div className="text-4xl mb-4">🔍</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">AI Analysis</h3>
-                <p className="text-gray-600">Advanced computer vision analyzes dot patterns, symmetry, and mathematical properties</p>
+    <main className="container mx-auto px-4 sm:px-8 md:px-16 py-16 sm:py-24 text-center" style={{background: 'linear-gradient(135deg, #FFF8DC 0%, #FFE4B5 50%, #FFF8DC 100%)'}}>
+      {/* Hero Section */}
+      <div className="relative inline-block">
+        <h1 className="text-6xl sm:text-8xl md:text-9xl font-black tracking-tighter leading-none">
+          K<span className="relative inline-block">
+            O
+            {/* Green Sticker */}
+            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-24 h-24 sm:w-28 sm:h-28 bg-green-300 rounded-full flex items-center justify-center p-2 transform rotate-[-15deg]">
+              <div className="w-full h-full border-2 border-dashed border-black rounded-full flex items-center justify-center">
+                <span className="text-4xl">🎨</span>
               </div>
-              <div className="animate-fade-in-up" style={{ animationDelay: '0.8s' }}>
-                <div className="text-4xl mb-4">🎨</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Cultural Insights</h3>
-                <p className="text-gray-600">Learn about regional styles, historical significance, and artistic techniques</p>
-              </div>
-              <div className="animate-fade-in-up" style={{ animationDelay: '1s' }}>
-                <div className="text-4xl mb-4">✨</div>
-                <h3 className="text-xl font-bold text-gray-900 mb-2">Digital Recreation</h3>
-                <p className="text-gray-600">Generate beautiful digital versions of your traditional kolam patterns</p>
-              </div>
+              {/* This is a simplified version of the circular text */}
+              <p className="absolute text-[8px] sm:text-[10px] w-full h-full font-bold text-black uppercase tracking-wider text-center animate-spin-slow">
+                SAYING GOODBYE TO BORING PATTERNS •
+              </p>
             </div>
-          </div>
+          </span>LAM
+          <br />
+          ON DEMAND
+        </h1>
+
+        {/* "Cruising on a Pattern Cloud" Sticker */}
+        <div className="absolute top-[-2rem] right-[-3rem] sm:top-0 sm:right-[-4rem] md:right-[-6rem] bg-white p-4 border-2 border-black rounded-lg shadow-[8px_8px_0_0_#000] transform -rotate-6 w-48 sm:w-56">
+           <p className="text-xs font-bold uppercase">HELLO, I AM</p>
+           <p className="text-lg font-bold">Cruising on a Pattern Cloud ☁️</p>
         </div>
       </div>
-    </section>
+
+      <p className="max-w-2xl mx-auto mt-8 text-lg sm:text-xl md:text-2xl font-medium text-gray-700">
+        We take your kolam creation stress away, so you can focus on the bigger picture.
+      </p>
+
+      <button
+        onClick={onStartAnalyzing}
+        className="inline-block mt-12 bg-red-500 text-white text-sm sm:text-base font-bold py-4 px-10 rounded-lg shadow-lg hover:bg-red-600 transition-transform hover:scale-105"
+      >
+        START ANALYZING NOW
+      </button>
+    </main>
   );
 };
 

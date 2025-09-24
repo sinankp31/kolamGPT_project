@@ -1,26 +1,28 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 
-const Header = () => {
+const Header = ({ onStartAnalyzing, showNav = true }) => {
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center py-4">
-          <div className="flex items-center">
-            <div className="text-2xl font-bold text-orange-600">🎨 KolamGPT</div>
-          </div>
-          <nav className="hidden md:flex space-x-8">
-            <a href="#features" className="text-gray-700 hover:text-orange-600 transition-colors">Features</a>
-            <a href="#how-it-works" className="text-gray-700 hover:text-orange-600 transition-colors">How It Works</a>
-            <a href="#contact" className="text-gray-700 hover:text-orange-600 transition-colors">Contact</a>
-          </nav>
-          <Link
-            to="/analyze"
-            className="bg-orange-600 text-white px-6 py-2 rounded-lg hover:bg-orange-700 transition-colors font-medium"
-          >
-            Try Now
-          </Link>
+    <header className="py-6 px-4 sm:px-8 md:px-16" style={{background: 'linear-gradient(135deg, #FFF8DC 0%, #FFE4B5 100%)'}}>
+      <div className="container mx-auto flex justify-between items-center">
+        <div className="font-black text-3xl tracking-wider text-orange-800 hover:text-orange-900 transition-all duration-300 hover:scale-105 cursor-pointer">
+          KOD
         </div>
+        {showNav && (
+          <nav className="hidden lg:flex items-center space-x-10">
+            {['OUR SOLUTION', 'HOW IT WORKS', 'CONTACT US'].map((item) => (
+              <a href="#" key={item} className="text-sm font-black tracking-widest text-orange-700 hover:text-orange-900 transition-all duration-300 hover:scale-105 hover:text-orange-800 relative group">
+                {item}
+                <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-orange-600 transition-all duration-300 group-hover:w-full"></span>
+              </a>
+            ))}
+          </nav>
+        )}
+        <button
+          onClick={onStartAnalyzing}
+          className="bg-gradient-to-r from-orange-500 to-red-500 text-white text-sm font-black py-3 px-8 rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 hover:from-orange-600 hover:to-red-600"
+        >
+          {showNav ? 'START ANALYZING' : 'HOME'}
+        </button>
       </div>
     </header>
   );
