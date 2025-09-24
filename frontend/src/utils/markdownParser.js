@@ -1,29 +1,17 @@
-// Simple markdown parser for basic formatting
-
 export const parseMarkdown = (text) => {
-  if (!text) return '';
+    // Basic markdown to HTML conversion
+    let html = text
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+        .replace(/\*(.*?)\*/g, '<em>$1</em>')       // Italic
+        .replace(/`([^`]+)`/g, '<code class="bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-1.5 py-0.5 rounded-md text-sm">$1</code>') // Inline code
+        .replace(/^- (.*)$/gm, '<li>$1</li>');     // List items
 
-  let html = text
-    // Bold text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    // Italic text
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    // Code blocks
-    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
-    // Inline code
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    // Headers
-    .replace(/^### (.*$)/gm, '<h3>$1</h3>')
-    .replace(/^## (.*$)/gm, '<h2>$1</h2>')
-    .replace(/^# (.*$)/gm, '<h1>$1</h1>')
-    // Lists
-    .replace(/^\* (.*$)/gm, '<li>$1</li>')
-    .replace(/^\d+\. (.*$)/gm, '<li>$1</li>')
-    // Line breaks
-    .replace(/\n/g, '<br>');
+    // Wrap consecutive list items in <ul>
+    if (html.includes('<li>')) {
+        html = `<ul>${html.replace(/<\/li>\n<li>/g, '</li><li>')}</ul>`
+               .replace(/<\/li><ul>/g, '</li>\n<ul>') // Fix nested lists if any
+               .replace(/<\/ul><li>/g, '</ul>\n<li>'); 
+    }
 
-  // Wrap consecutive list items
-  html = html.replace(/(<li>.*<\/li>\s*)+/g, '<ul>$&</ul>');
-
-  return html;
+    return html.replace(/\n/g, '<br />'); // Newlines
 };
